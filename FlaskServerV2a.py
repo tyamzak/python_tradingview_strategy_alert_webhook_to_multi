@@ -1,6 +1,6 @@
 ﻿#============================================================================
 # TradingView + Binance等 仮想通貨
-# 各取引所ごとに関数を分けたほうがいい。orderデータとかが散らばり過ぎてわからない。
+# TODO 各取引所ごとに関数を分けたほうがいい。orderデータとかが散らばり過ぎてわからない。
 # 未定義　TV_MagicNo　ccxtKucoinf
 #============================================================================
 # -*- coding: utf-8 -*-
@@ -10,11 +10,25 @@ from flask import Flask, request, abort
 from pprint import pprint
 import datetime
 import requests
+import os
+from os.path import join, dirname
+from dotenv import load_dotenv
+from pathlib import Path
+from matplotlib import pyplot as plt
 # Binance用に追加が必要 start ---------
 import json
 import hmac
 import hashlib
 # Binance用に追加が必要  end ---------
+
+#-------------------------------------------------------
+# 環境変数の読み込み
+#-------------------------------------------------------
+
+load_dotenv(verbose=True)
+
+dotenv_path = join(Path().resolve(), '.env')
+load_dotenv(dotenv_path)
 
 #-------------------------------------------------------
 # CCXTapi設定
