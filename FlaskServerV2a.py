@@ -1,6 +1,6 @@
 ﻿#============================================================================
 # TradingView + Binance等 仮想通貨
-# TODO 各取引所ごとに関数を分けたほうがいい。orderデータとかが散らばり過ぎてわからない。
+# TODO 各取引所ごとに関数を分けたほうがいい。
 # 未定義　TV_MagicNo　ccxtKucoinf
 #============================================================================
 # -*- coding: utf-8 -*-
@@ -15,24 +15,22 @@ from os.path import join, dirname
 from dotenv import load_dotenv
 from pathlib import Path
 from matplotlib import pyplot as plt
-# Binance用に追加が必要 start ---------
 import json
 import hmac
 import hashlib
-# Binance用に追加が必要  end ---------
 
-#-------------------------------------------------------
-# 環境変数の読み込み
-#-------------------------------------------------------
+########################################################
+# load env
+########################################################
 
 load_dotenv(verbose=True)
 
 dotenv_path = join(Path().resolve(), '.env')
 load_dotenv(dotenv_path)
 
-#-------------------------------------------------------
-# CCXTapi設定
-#-------------------------------------------------------
+########################################################
+# CCXT
+########################################################
 
 import ccxt
 
@@ -59,12 +57,10 @@ ccxtBitget.password = ''
 
 
 
-# -----------------------------------------------------------------------
-# ロット設定 
-# TradingViewでロット設定しない場合は、こちらでロットを固定で持つことも可能
-# ※通貨の種類増やしたら「def webhook():」のglobalも増やす
-# -----------------------------------------------------------------------
-# 例)ロット設定
+############################################
+# configure lot
+############################################
+
 BTC_lot = 0.005
 ETH_lot = 0.05
 AVAX_lot = 0.7
@@ -74,15 +70,11 @@ AMPL_lot= 20
 BNB_lot = 0.1
 XRP_lot = 50
 
-# BITGET
 
 
-# kucoinfutures用
-
-
-#-------------------------------------------------------
-# Line通知設定
-#-------------------------------------------------------
+########################################################
+# Line notification
+########################################################
 LINE_MSG = "OFF"    # ON or OFF
 
 def LINE_BOT(msg2):
@@ -93,9 +85,9 @@ def LINE_BOT(msg2):
    headers = {'Authorization': 'Bearer ' + line_notify_token} 
    line_notify = requests.post(line_notify_api, data=payload, headers=headers)
 
-#-------------------------------------------------------
-# ログ設定
-#-------------------------------------------------------
+########################################################
+# log configuration
+########################################################
 from logging import getLogger,Formatter,StreamHandler,FileHandler,INFO
 logger2 = getLogger(__name__)
 handlerSh = StreamHandler()
@@ -108,9 +100,9 @@ logger2.addHandler(handlerFile)
 
 
 
-# ----------------------------------------------
-# Flaskを起動する
-# ----------------------------------------------
+############################################
+# Flask
+############################################
 app = Flask(__name__)
 
 
@@ -121,17 +113,17 @@ def root() -> str:
     Returns:
         str: _description_message
     """
-    return 'online ＞V(＾＾)'
+    return 'online'
 
 
 @app.route('/webhook', methods=['POST'])
 def webhook():
     """_summary_
-    Trading viewのWebhookを受け取った後の処理
+    transaction after webhook received
     """
-    # --------------------------------------
-    # 発注ロットの読み込み（固定で行う場合）
-    # --------------------------------------
+    #########################################
+    # reading order lot
+    #########################################
     global BTC_lot
     global ETH_lot
     global AMPL_lot
@@ -146,25 +138,24 @@ def webhook():
     global BNB_lot 
     global XRP_lot 
 
-    # --------------------------------------
-    # Webhookを受け取った
-    # --------------------------------------
+    #########################################
+    # received webhook
+    #########################################
     if request.method == 'POST':
-        # FlaskでPOSTされたデータをそのまま受け取るときはrequest.dataではなくrequest.get_data()を使う
         #data = request.get_data()
-        print("----------------------")
+        print("###")
         data = request.get_data(as_text=True)
         print(data)
-        print('Webhook受信')
+        print('Webhook_received')
 
-        # ----------------------------------------------------
-        # メッセージ内容を振り分ける ※アラートを「@」で分ける
+        ############################################
+        # split messages with '@'
         # 
-        # TradingViewの通知設定は以下
+        # TradingView notification example
         # FTX@{{ticker}}@{{strategy.order.action}}@0.005@{{strategy.position_size}}
-        # ----------------------------------------------------
+        ############################################
         moji = data.split('@')[0]
-        print("取引所:",moji)
+        print("market:",moji)
         moji = data.split('@')[1]
         print("ticker:",moji)
         moji = data.split('@')[2]
@@ -173,110 +164,105 @@ def webhook():
         print("size:",moji)
         moji = data.split('@')[4]
         print("pos:",moji)
-        print("----------------------")
+        print("###")
 
-        # ----------------------------------------------
-        # ログ出力
-        # ----------------------------------------------
+        ##########################################
+        # logging
+        ##########################################
         LogTime = datetime.datetime.now()
         sLogTime =  LogTime.strftime("%Y-%m-%d %H:%M:%S")
         text = sLogTime, "Webhook: ", data
         logger2.info(text)
 
         # ===============================================================================================
-        # ★ オーダー実行処理 ★★★
+        # post order
         # ===============================================================================================
         moji = data.split('@')[2]
-        # オーダー用格納
         sOrder = ""
         if str(moji) == "buy":
             sOrder = "buy"
         elif str(moji) == "sell":
             sOrder = "sell"
         print("order:",sOrder)
-        
-
-        # ====================================  ここから追加分 start  ==================================
-
 
         if data.split('@')[0] == "Bybit":
-            print(" Bybit 処理スタート")
-            # ---------------------------------------------------------
-            # HTTP形式の設定
-            # ---------------------------------------------------------
+            print(" Bybit start transaction")
+            ############################################
+            # HTTP
+            ############################################
             endpoint = 'https://api-bybit.com'
             path = '/private/linear/order/create';
             func = '/fapi/v1/ticker/bookTicker'
-            # ----------------------------------------------------------------------------------------
-            # 発注処理 BTCPERP Bybit
-            # --------------------------------------------------------
+            ############################################
+            # order BTCPERP Bybit
+            ############################################
             if str(data.split('@')[1]) == "BTCUSDT":
-                print("● 注文処理 ● BTCUSDT (Bybit)")
+                print(" order transaction  BTCUSDT (Bybit)")
 
-                # 発注ロット
+                # order lot
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
                 BTC = bybit.create_order('BTCUSDT', type='market', side=sOrder, amount=str(TV_lot), price=0)
                 pprint(BTC)
-                # TradingViewから新規注文か、決済処理か判断する
+                # TradingView decide new order or not
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol and lot
+                ############################################
                 SYMBOL = "BTCUSDT"
                 quantity = TV_lot
 
 
-# ------------------------------------------------------------
-        # ====================================  ここから追加分 start  ==================================
+############################################
+
         if data.split('@')[0] == "Binance":
-            print(" BINANCE 処理スタート")
-            # -----------------------------------------------------------------------
-            # 取引処理 Binance先物（ USD(S)-M ）USD-M Futures
-            # -----------------------------------------------------------------------
-            # ---------------------------------------------------------
-            # HTTP形式の設定
-            # ---------------------------------------------------------
+            print(" BINANCE transaction started")
+            ############################################
+            # order transaction Binance（ USD(S)-M ）USD-M Futures
+            ############################################
+            ############################################
+            # HTTP
+            ############################################
             endpoint = 'https://fapi.binance.com'
             path = '/fapi/v1/order?';
             func = '/fapi/v1/ticker/bookTicker'
 
-            # ---------------------------------------------------------
-            # API設定
-            # ---------------------------------------------------------
+            ############################################
+            # API configuration
+            ############################################
 
             api_key = ""
             secret_key = ""
 
-            # --------------------------------------------------------
-            # 発注処理 BTCPERP Binance
-            # --------------------------------------------------------
+            ############################################
+            # Order Transaction BTCPERP Binance
+            ############################################
             if str(data.split('@')[1]) == "BTCPERP":
-                print("● 注文処理 ● BTCPERP (Binance)")
+                print("Order Transaction BTCPERP (Binance)")
 
-                # 発注ロット
+                # Order Lots
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
 
 
-                # TradingViewから新規注文か、決済処理か判断する
+                # Decide new order or not from Trading View
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol, Lots configuration
+                ############################################
                 SYMBOL = "BTCUSDT"
                 quantity = TV_lot
 
 
 
-                # ---------------------------------------------------------
-                # オーダー処理
-                # ---------------------------------------------------------
-                # 現在価格を取得する
+                ############################################
+                # Order transaction
+                ############################################
+                # Get Current Price
                 url_Ticker = endpoint + func + '?symbol=' + SYMBOL;
                 res = requests.get(url_Ticker)
                 data_Ticker = json.loads(res.text)
@@ -284,115 +270,115 @@ def webhook():
                 bid_price = data_Ticker['bidPrice']
                 ask_price = data_Ticker['askPrice']
                 print("bid: ",bid_price,"    ask: ",ask_price)
-                # タイムスタンプを宣言
+                # Define Timestamp
                 timestamp = round(datetime.datetime.now().timestamp()) * 1000
 
 
 
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi>0はlong
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi>0 is long
+                ############################################                
                 if (sOrder == "buy") and (TV_sPosi > 0):
-                    print("● 注文処理(Long) ● BTC-PERP")
+                    print(" Order Transaction(Long)  BTC-PERP")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "BUY"
                     price = float(ask_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
-                # ------------------------------------------------------------
-                # Longの決済
-                # ------------------------------------------------------------
+                ############################################
+                # Long
+                ############################################
                 if (sOrder == "sell") and (TV_sPosi == 0):
-                    print("● 決済処理(buy) ● BTC-PERP")
+                    print(" Transaction(buy)  BTC-PERP")
                     side = "SELL"
                     price = float(bid_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi<0はShort
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi<0 is Short
+                ############################################                
                 if (sOrder == "sell") and (TV_sPosi < 0):
-                    print("● 注文処理(Short) ● BTC-PERP")
+                    print(" Order Transaction(Short)  BTC-PERP")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "SELL"
                     price = float(bid_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
-                # ------------------------------------------------------------
-                # Shortの決済
-                # ------------------------------------------------------------
+                ############################################
+                # Short Transaction
+                ############################################
                 if (sOrder == "buy") and (TV_sPosi == 0):
-                    print("● 注文処理(Short) ● BTC-PERP")
+                    print(" Order Transaction(Short)  BTC-PERP")
                     side = "BUY"
                     price = float(ask_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
-                # ------------------------------------------------------------
-                # HTTP形式で送信
-                # ------------------------------------------------------------
-                # HTTP形式に引っ付ける
+                ############################################
+                # HTTP request
+                ############################################
+                # pls HTTP format
                 query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
-                # hashセキュリティ
+                # hash Security
                 signature = hmac.new(bytearray(secret_key.encode('utf-8')), query.encode('utf-8') , digestmod = hashlib.sha256 ).hexdigest()
-                # HTTPとHashを引っ付ける
+                # HTTP + Hash
                 url = endpoint + path + query + '&signature=' + signature
-                # ヘッダーを付けて飛ばす
+                # send with header
                 headers = {
                     'X-MBX-APIKEY': api_key
                 }
                 res = requests.post(url, headers=headers)
                 datas = json.loads(res.text)
-                # オーダー通るまで少し待ち
+                # Wait
                 time.sleep(1)
-                print("-----------------------------------")
+                print("###")
                 print("オーダーID:" , datas['orderId'])
-                print("-----------------------------------")
+                print("###")
                 print(datas)
 
 
-# ------------------------------------------------------------
-            # ----------------------------------------------------------------------------------------
-            # 発注処理 ETHPERP Binance
-            # --------------------------------------------------------
+############################################
+            ############################################
+            # Order Transaction ETHPERP Binance
+            ############################################
             if str(data.split('@')[1]) == "ETHPERP":
-                print("● 注文処理 ● ETHPERP (Binance)")
+                print("Order Transaction ETHPERP (Binance)")
 
-                # 発注ロット
+                # Order Lots
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
 
-                # TradingViewから新規注文か、決済処理か判断する
+                # Decide new order or not from Trading View
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol, Lots configuration
+                ############################################
                 SYMBOL = "ETHUSDT"
                 quantity = TV_lot
 
 
 
-                # ---------------------------------------------------------
-                # オーダー処理
-                # ---------------------------------------------------------
-                # 現在価格を取得する
+                ############################################
+                # Order transaction
+                ############################################
+                # Get Current Price
                 url_Ticker = endpoint + func + '?symbol=' + SYMBOL;
                 res = requests.get(url_Ticker)
                 data_Ticker = json.loads(res.text)
@@ -400,118 +386,118 @@ def webhook():
                 bid_price = data_Ticker['bidPrice']
                 ask_price = data_Ticker['askPrice']
                 print("bid: ",bid_price,"    ask: ",ask_price)
-                # タイムスタンプを宣言
+                # Define Timestamp
                 timestamp = round(datetime.datetime.now().timestamp()) * 1000
 
 
 
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi>0はlong
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi>0 is long
+                ############################################                
                 if (sOrder == "buy") and (TV_sPosi > 0):
-                    print("● 注文処理(Long) ● ETH-PERP")
+                    print(" Order Transaction(Long)  ETH-PERP")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "BUY"
                     price = float(ask_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
-                # ------------------------------------------------------------
-                # Longの決済
-                # ------------------------------------------------------------
+                ############################################
+                # Long
+                ############################################
                 if (sOrder == "sell") and (TV_sPosi == 0):
-                    print("● 決済処理(buy) ● BTC-PERP")
+                    print(" Transaction(buy)  BTC-PERP")
                     side = "SELL"
                     price = float(bid_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi<0はShort
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi<0 is Short
+                ############################################                
                 if (sOrder == "sell") and (TV_sPosi < 0):
-                    print("● 注文処理(Short) ● BTC-PERP")
+                    print(" Order Transaction(Short)  BTC-PERP")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "SELL"
                     price = float(bid_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
-                # ------------------------------------------------------------
-                # Shortの決済
-                # ------------------------------------------------------------
+                ############################################
+                # Short Transaction
+                ############################################
                 if (sOrder == "buy") and (TV_sPosi == 0):
-                    print("● 注文処理(Short) ● BTC-PERP")
+                    print(" Order Transaction(Short)  BTC-PERP")
                     side = "BUY"
                     price = float(ask_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
 
 
-                # ------------------------------------------------------------
-                # HTTP形式で送信
-                # ------------------------------------------------------------
-                # HTTP形式に引っ付ける
+                ############################################
+                # HTTP request
+                ############################################
+                # pls HTTP format
                 query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
-                # hashセキュリティ
+                # hash Security
                 signature = hmac.new(bytearray(secret_key.encode('utf-8')), query.encode('utf-8') , digestmod = hashlib.sha256 ).hexdigest()
-                # HTTPとHashを引っ付ける
+                # HTTP + Hash
                 url = endpoint + path + query + '&signature=' + signature
-                # ヘッダーを付けて飛ばす
+                # send with header
                 headers = {
                     'X-MBX-APIKEY': api_key
                 }
                 res = requests.post(url, headers=headers)
                 datas = json.loads(res.text)
-                # オーダー通るまで少し待ち
+                # Wait
                 time.sleep(1)
-                print("-----------------------------------")
+                print("###")
                 print("オーダーID:" , datas['orderId'])
-                print("-----------------------------------")
+                print("###")
                 print(datas)
 
-# ------------------------------------------------------------
-            # ----------------------------------------------------------------------------------------
-            # 発注処理 AVAXPERP Binance
-            # --------------------------------------------------------
+############################################
+            ############################################
+            # Order Transaction AVAXPERP Binance
+            ############################################
             if str(data.split('@')[1]) == "AVAXPERP":
-                print("● 注文処理 ● AVAXPERP (Binance)")
+                print("Order Transaction AVAXPERP (Binance)")
 
-                # 発注ロット
+                # Order Lots
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
 
 
-                # TradingViewから新規注文か、決済処理か判断する
+                # Decide new order or not from Trading View
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol, Lots configuration
+                ############################################
                 SYMBOL = "AVAXUSDT"
                 quantity = TV_lot
 
 
 
-                # ---------------------------------------------------------
-                # オーダー処理
-                # ---------------------------------------------------------
-                # 現在価格を取得する
+                ############################################
+                # Order transaction
+                ############################################
+                # Get Current Price
                 url_Ticker = endpoint + func + '?symbol=' + SYMBOL;
                 res = requests.get(url_Ticker)
                 data_Ticker = json.loads(res.text)
@@ -519,451 +505,448 @@ def webhook():
                 bid_price = data_Ticker['bidPrice']
                 ask_price = data_Ticker['askPrice']
                 print("bid: ",bid_price,"    ask: ",ask_price)
-                # タイムスタンプを宣言
+                # Define Timestamp
                 timestamp = round(datetime.datetime.now().timestamp()) * 1000
 
 
 
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi>0はlong
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi>0 is long
+                ############################################                
                 if (sOrder == "buy") and (TV_sPosi > 0):
-                    print("● 注文処理(Long) ● AVAX-PERP")
+                    print(" Order Transaction(Long)  AVAX-PERP")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "BUY"
                     price = float(ask_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
-                # ------------------------------------------------------------
-                # Longの決済
-                # ------------------------------------------------------------
+                ############################################
+                # Long
+                ############################################
                 if (sOrder == "sell") and (TV_sPosi == 0):
-                    print("● 決済処理(buy) ● AVAX-PERP")
+                    print(" Transaction(buy)  AVAX-PERP")
                     side = "SELL"
                     price = float(bid_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi<0はShort
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi<0 is Short
+                ############################################                
                 if (sOrder == "sell") and (TV_sPosi < 0):
-                    print("● 注文処理(Short) ● AVAX-PERP")
+                    print(" Order Transaction(Short)  AVAX-PERP")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "SELL"
                     price = float(bid_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
-                # ------------------------------------------------------------
-                # Shortの決済
-                # ------------------------------------------------------------
+                ############################################
+                # Short Transaction
+                ############################################
                 if (sOrder == "buy") and (TV_sPosi == 0):
-                    print("● 注文処理(Short) ● AVAX-PERP")
+                    print(" Order Transaction(Short)  AVAX-PERP")
                     side = "BUY"
                     price = float(ask_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
-                # ------------------------------------------------------------
-                # HTTP形式で送信
-                # ------------------------------------------------------------
-                # HTTP形式に引っ付ける
+                ############################################
+                # HTTP request
+                ############################################
+                # pls HTTP format
                 query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
-                # hashセキュリティ
+                # hash Security
                 signature = hmac.new(bytearray(secret_key.encode('utf-8')), query.encode('utf-8') , digestmod = hashlib.sha256 ).hexdigest()
-                # HTTPとHashを引っ付ける
+                # HTTP + Hash
                 url = endpoint + path + query + '&signature=' + signature
-                # ヘッダーを付けて飛ばす
+                # send with header
                 headers = {
                     'X-MBX-APIKEY': api_key
                 }
                 res = requests.post(url, headers=headers)
                 datas = json.loads(res.text)
-                # オーダー通るまで少し待ち
+                # Wait
                 time.sleep(1)
-                print("-----------------------------------")
+                print("###")
                 print("オーダーID:" , datas['orderId'])
-                print("-----------------------------------")
+                print("###")
                 print(datas)
 
 
 
-        # ====================================  ここから追加分  end  ==================================
-# ------------------------------------------------------------
-        # ====================================  ここから追加分 start  ==================================
-        # -----------------------------------------------------------------------
-        # 取引処理 Bitget
-        # -----------------------------------------------------------------------
+        
+############################################
+        
+        ############################################
+        # Transaction Bitget
+        ############################################
         if data.split('@')[0] == "Bitget":
             print(" BITGET 処理スタート")
-            # ----------------------------------------------------------------------------------------
-            # 発注処理 BTCPERP BITGET
-            # --------------------------------------------------------
+            ############################################
+            # Order Transaction BTCPERP BITGET
+            ############################################
             if str(data.split('@')[1]) == "BTCUSDTPERP":
-                print("● 注文処理 ● BTCPERP (BITGET)")
+                print("Order Transaction BTCPERP (BITGET)")
 
-                # 発注ロット
+                # Order Lots
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
 
-                # TradingViewから新規注文か、決済処理か判断する
+                # Decide new order or not from Trading View
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol, Lots configuration
+                ############################################
                 SYMBOL = "CMT_BTCUSDT"
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi>0はlong params={'type': '1',} 
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi>0 long params={'type': '1',} 
+                ############################################                
                 if (sOrder == "buy") and (TV_sPosi > 0):
-                    print("● 注文処理(Long) ● BTCUSDTPERP")
+                    print(" Order Transaction(Long)  BTCUSDTPERP")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "buy"
                     # price = float(ask_price)
 
-                    # 発注処理
+                    # Order Transaction
                     BTC = ccxt.bitget.create_order(symbol=SYMBOL, type='market', side=sOrder, amount=str(TV_lot), params={'type': '1',})
                     pprint(BTC)
 
 
-                # ------------------------------------------------------------
-                # Longの決済 決済には「params={'type': '3',}」が必要
-                # ------------------------------------------------------------
+                ############################################
+                # Long params={'type': '3',} needed
+                ############################################
                 if (sOrder == "sell") and (TV_sPosi == 0):
-                    print("● 決済処理(buy) ● BTCUSDTPERP")
+                    print(" Transaction(buy)  BTCUSDTPERP")
                     side = "sell"
                     # price = float(bid_price)
 
-                    # 発注処理
+                    # Order Transaction
                     BTC = ccxt.bitget.create_order(symbol=SYMBOL, type='market', side=sOrder, amount=str(TV_lot), params={'type': '3',})
                     pprint(BTC)
 
 
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi<0はShort
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi<0 is Short
+                ############################################                
                 if (sOrder == "sell") and (TV_sPosi < 0):
-                    print("● 注文処理(Short) ● BTC-PERP")
+                    print(" Order Transaction(Short)  BTC-PERP")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "SELL"
                     price = float(bid_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
-                # ------------------------------------------------------------
-                # Shortの決済
-                # ------------------------------------------------------------
+                ############################################
+                # Short Transaction
+                ############################################
                 if (sOrder == "buy") and (TV_sPosi == 0):
-                    print("● 注文処理(Short) ● BTC-PERP")
+                    print(" Order Transaction(Short)  BTC-PERP")
                     side = "BUY"
                     price = float(ask_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
 
 
-            # ----------------------------------------------------------------------------------------
-            # 発注処理 ETHPERP BITGET
-            # --------------------------------------------------------
+            ############################################
+            # Order Transaction ETHPERP BITGET
+            ############################################
             if str(data.split('@')[1]) == "ETHUSDTPERP":
-                print("● 注文処理 ● ETHPERP (BITGET)")
+                print("Order Transaction ETHPERP (BITGET)")
 
-                # 発注ロット
+                # Order Lots
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
 
-                # TradingViewから新規注文か、決済処理か判断する
+                # Decide new order or not from Trading View
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol, Lots configuration
+                ############################################
                 SYMBOL = "CMT_ETHUSDT"
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi>0はlong params={'type': '1',} 
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi>0 is long params={'type': '1',} 
+                ############################################                
                 if (sOrder == "buy") and (TV_sPosi > 0):
-                    print("● 注文処理(Long) ● CMT_ETHUSDT")
+                    print(" Order Transaction(Long)  CMT_ETHUSDT")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "buy"
                     # price = float(ask_price)
 
-                    # 発注処理
+                    # Order Transaction
                     ETH = ccxt.bitget.create_order(SYMBOL, type='market', side=sOrder, amount=str(TV_lot), params={'type': '1',})
                     pprint(ETH)
 
 
-                # ------------------------------------------------------------
-                # Longの決済 決済には「params={'type': '3',}」が必要
-                # ------------------------------------------------------------
+                ############################################
+                # Long params={'type': '3',} is needed
+                ############################################
                 if (sOrder == "sell") and (TV_sPosi == 0):
-                    print("● 決済処理(buy) ● CMT_ETHUSDT")
+                    print(" Transaction(buy)  CMT_ETHUSDT")
                     side = "sell"
                     # price = float(bid_price)
 
-                    # 発注処理
+                    # Order Transaction
                     ETH = ccxt.bitget.create_order(SYMBOL, type='market', side=sOrder, amount=str(TV_lot), params={'type': '3',})
                     pprint(ETH)
 
 
 
-            # ----------------------------------------------------------------------------------------
-            # 発注処理 AVAXPERP BITGET
-            # --------------------------------------------------------
+            ############################################
+            # Order Transaction AVAXPERP BITGET
+            ############################################
             if str(data.split('@')[1]) == "AVAXUSDTPERP":
-                print("● 注文処理 ● AVAXPERP (BITGET)")
+                print("Order Transaction AVAXPERP (BITGET)")
 
-                # 発注ロット
+                # Order Lots
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
 
-                # TradingViewから新規注文か、決済処理か判断する
+                # Decide new order or not from Trading View
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol, Lots configuration
+                ############################################
                 SYMBOL = "CMT_AVAXUSDT"
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi>0はlong params={'type': '1',} 
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi>0 is long params={'type': '1',} 
+                ############################################                
                 if (sOrder == "buy") and (TV_sPosi > 0):
-                    print("● 注文処理(Long) ● AVAXUSDTPERP")
+                    print(" Order Transaction(Long)  AVAXUSDTPERP")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "buy"
                     # price = float(ask_price)
 
-                    # 発注処理
+                    # Order Transaction
                     BTC = ccxt.Bitget.create_order(SYMBOL, type='market', side=sOrder, amount=str(TV_lot), params={'type': '1',})
                     pprint(BTC)
 
-                    # ログ出力
+                    # Logging
                     LogTime = datetime.datetime.now()
                     sLogTime =  LogTime.strftime("%Y-%m-%d %H:%M:%S")
-                    text = str(sLogTime)+"オーダー管理へ格納: "+str(query)+":"+str(TV_MagicNo)
+                    text = str(sLogTime)+"Store Order management: "+str(query)+":"+str(TV_MagicNo)
                     logger2.info(text)
-                # ------------------------------------------------------------
-                # Longの決済 決済には「params={'type': '3',}」が必要
-                # ------------------------------------------------------------
+                ############################################
+                # Long params={'type': '3',} is needed
+                ############################################
                 if (sOrder == "sell") and (TV_sPosi == 0):
-                    print("● 決済処理(buy) ● AVAXUSDTPERP")
+                    print(" Transaction(buy)  AVAXUSDTPERP")
                     side = "sell"
                     # price = float(bid_price)
 
-                    # 発注処理
+                    # Order Transaction
                     BTC = ccxt.Bitget.create_order(SYMBOL, type='market', side=sOrder, amount=str(TV_lot), params={'type': '3',})
                     pprint(BTC)
 
-                    # ログ出力
+                    # Logging
                     LogTime = datetime.datetime.now()
                     sLogTime =  LogTime.strftime("%Y-%m-%d %H:%M:%S")
-                    text = str(sLogTime)+"オーダー管理へ格納: "+str(query)+":"+str(TV_MagicNo)
+                    text = str(sLogTime)+"Store Order management: "+str(query)+":"+str(TV_MagicNo)
                     logger2.info(text)
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi<0はShort
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi<0 is Short
+                ############################################                
                 if (sOrder == "sell") and (TV_sPosi < 0):
-                    print("● 注文処理(Short) ● AVAXUSDTPERP")
+                    print(" Order Transaction(Short)  AVAXUSDTPERP")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "SELL"
                     price = float(bid_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
-                    # ログ出力
+                    # Logging
                     LogTime = datetime.datetime.now()
                     sLogTime =  LogTime.strftime("%Y-%m-%d %H:%M:%S")
-                    text = str(sLogTime)+"オーダー管理へ格納: "+str(query)+":"+str(TV_MagicNo)
+                    text = str(sLogTime)+"Store Order management: "+str(query)+":"+str(TV_MagicNo)
                     logger2.info(text)
-                # ------------------------------------------------------------
-                # Shortの決済
-                # ------------------------------------------------------------
+                ############################################
+                # Short Transaction
+                ############################################
                 if (sOrder == "buy") and (TV_sPosi == 0):
-                    print("● 注文処理(Short) ● AVAXUSDTPERP")
+                    print(" Order Transaction(Short)  AVAXUSDTPERP")
                     side = "BUY"
                     price = float(ask_price)
 
-                    # HTTP形式に引っ付ける
+                    # pls HTTP format
                     query = 'symbol=' + SYMBOL + '&side=' + side + '&price=' + str(price) +'&type=LIMIT&timeInForce=GTC'  +'&quantity=' + str(quantity) +'&timestamp=' + str(timestamp);
 
-                    # ログ出力
+                    # Logging
                     LogTime = datetime.datetime.now()
                     sLogTime =  LogTime.strftime("%Y-%m-%d %H:%M:%S")
-                    text = str(sLogTime)+"オーダー管理へ格納: "+str(query)+":"+str(TV_MagicNo)
+                    text = str(sLogTime)+"Store Order management: "+str(query)+":"+str(TV_MagicNo)
                     logger2.info(text)
 
-            # --------------------------------------------------------
-            # 発注処理 NEARPERP BITGET
-            # --------------------------------------------------------
+            ############################################
+            # Order Transaction NEARPERP BITGET
+            ############################################
             if str(data.split('@')[1]) == "NEARUSDTPERP":
-                print("● 注文処理 ● NEARPERP (BITGET)")
+                print("Order Transaction NEARPERP (BITGET)")
 
-                # 発注ロット
+                # Order Lots
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
 
-                # TradingViewから新規注文か、決済処理か判断する
+                # Decide new order or not from Trading View
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol, Lots configuration
+                ############################################
                 SYMBOL = "CMT_NEARUSDT"
                 quantity = TV_lot
 
-            # --------------------------------------------------------
-            # 発注処理 ATOMPERP BITGET
-            # --------------------------------------------------------
+            ############################################
+            # Order Transaction ATOMPERP BITGET
+            ############################################
             if str(data.split('@')[1]) == "ATOMUSDTPERP":
-                print("● 注文処理 ● ATOMPERP (BITGET)")
+                print("Order Transaction ATOMPERP (BITGET)")
 
-                # 発注ロット
+                # Order Lots
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
 
-                # TradingViewから新規注文か、決済処理か判断する
+                # Decide new order or not from Trading View
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol, Lots configuration
+                ############################################
                 SYMBOL = "CMT_ATOMUSDT"
                 quantity = TV_lot
 
-            # --------------------------------------------------------
-            # 発注処理 BNBPERP BITGET
-            # --------------------------------------------------------
+            ############################################
+            # Order Transaction BNBPERP BITGET
+            ############################################
             if str(data.split('@')[1]) == "BNBUSDTPERP":
-                print("● 注文処理 ● BNBPERP (BITGET)")
+                print("Order Transaction BNBPERP (BITGET)")
 
-                # 発注ロット
+                # Order Lots
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
 
-                # TradingViewから新規注文か、決済処理か判断する
+                # Decide new order or not from Trading View
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol, Lots configuration
+                ############################################
                 SYMBOL = "CMT_BNBUSDT"
                 quantity = TV_lot
 
-        # ====================================  ここから追加分  end  ==================================
+        
 
-        # ====================================  ここから追加分 start  ==================================
-        # -----------------------------------------------------------------------
-        # 取引処理 KuCoin
-        # -----------------------------------------------------------------------
+        
+        ############################################
+        # Transaction KuCoin
+        ############################################
         if data.split('@')[0] == "Kucoin":
             print(" KUCOIN 処理スタート")
-            # --------------------------------------------------------
-            # 発注処理
-            # --------------------------------------------------------
+            ############################################
+            # Order Transaction
+            ############################################
             if str(data.split('@')[1]) == "BTCUSDT":
-                print("● 注文処理 ● BTCPERP (Kucoin)")
+                print("Order Transaction BTCPERP (Kucoin)")
 
-                # 発注ロット
+                # Order Lots
                 TV_lot = ""
                 TV_lot = str(data.split('@')[3])
 
-                # TradingViewから新規注文か、決済処理か判断する
+                # Decide new order or not from Trading View
                 TV_sPosi = data.split('@')[4]
                 TV_sPosi = float(TV_sPosi)
 
-                # ---------------------------------------------------------
-                # シンボルとLotの設定
-                # ---------------------------------------------------------
+                ############################################
+                # Symbol, Lots configuration
+                ############################################
                 SYMBOL = "BTC/USDT:USDT"
 
-                # ------------------------------------------------------------
-                # 新規注文の場合 TV_sPosi>0はlong 
-                # ------------------------------------------------------------                
+                ############################################
+                # New Order TV_sPosi>0 is long 
+                ############################################                
                 if (sOrder == "buy") and (TV_sPosi > 0):
-                    print("● 注文処理(Long) ● BTC/USDT:USDT")
+                    print(" Order Transaction(Long)  BTC/USDT:USDT")
 
-                    # シンボルと価格の設定
+                    # Configure Symbol and Price
                     side = "buy"
                     # price = float(ask_price)
 
-                    # 発注処理
+                    # Order Transaction
                     order_Kucoin = ccxtKucoinf.create_order(SYMBOL, 'market', str(sOrder), int(TV_lot), {'leverage': 4})
                     pprint(order_Kucoin)
-                    print("発注ID:" + str(order_Kucoin['id']))
+                    print("OrderID:" + str(order_Kucoin['id']))
 
 
-                    # ログ出力
+                    # Logging
                     LogTime = datetime.datetime.now()
                     sLogTime =  LogTime.strftime("%Y-%m-%d %H:%M:%S")
-                    text = str(sLogTime)+"オーダー管理へ格納: "+str(query)+":"+str(TV_MagicNo)
+                    text = str(sLogTime)+"Store Order management: "+str(query)+":"+str(TV_MagicNo)
                     logger2.info(text)
-                # ------------------------------------------------------------
-                # Longの決済 
-                # ------------------------------------------------------------
+                ############################################
+                # Long 
+                ############################################
                 if (sOrder == "sell") and (TV_sPosi == 0):
-                    print("● 決済処理(buy) ● BTC/USDT:USDT")
+                    print(" Transaction(buy)  BTC/USDT:USDT")
                     side = "sell"
                     # price = float(bid_price)
 
-                    # 発注処理
+                    # Order Transaction
                     order_Kucoin = ccxtKucoinf.create_order(SYMBOL, 'market', str(sOrder), int(TV_lot), {'leverage': 4})
                     pprint(order_Kucoin)
-                    print("発注ID:" + str(order_Kucoin['id']))
+                    print("OrderID:" + str(order_Kucoin['id']))
 
-                    # ログ出力
+                    # Logging
                     LogTime = datetime.datetime.now()
                     sLogTime =  LogTime.strftime("%Y-%m-%d %H:%M:%S")
-                    text = str(sLogTime)+"オーダー管理へ格納: "+str(query)+":"+str(TV_MagicNo)
+                    text = str(sLogTime)+"Store Order management: "+str(query)+":"+str(TV_MagicNo)
                     logger2.info(text)
-        # ====================================  ここから追加分  end  ==================================
+        
 
-        print("----------------------")
-        # ---------------------------------------------------------------------------
-        # ★メッセージが取得できたらngrokに200を返す:（200okとなる）重要これないとエラー
-        # ---------------------------------------------------------------------------
-        # 削除しないでください
+        print("###")
+
         return '', 200
     else:
         abort(400)
 
-# ----------------------------------------------
-# 初期設定
-# ----------------------------------------------
+############################################
+# inititial configuration
+############################################
 if __name__ == '__main__':
-    # 重要！ ngrokとポート番号をあわせる
+
     app.run(debug=True, port=5000)
